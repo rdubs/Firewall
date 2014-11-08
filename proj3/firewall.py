@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from main import PKT_DIR_INCOMING, PKT_DIR_OUTGOING
+import socket, struct
 
 # TODO: Feel free to import any Python standard moduless as necessary.
 # (http://docs.python.org/2/library/)
@@ -21,6 +22,14 @@ class Firewall:
         #         config['rule']
 
         # TODO: Load the GeoIP DB ('geoipdb.txt') as well.
+        self.ip_DB = []
+        ip_ranges = open('geoipdb.txt')
+        for line in ip_ranges:
+            line_array = line.split(' ') 
+            line_array[0] = self.ip2long(line_array[0]) # Go from IP string to decimal: '1.0.0.0' => 8. 
+            line_array[1] = self.ip2long(line_array[1])
+            line_array[2] = line_array[2].replace('\n', '') #strip new line character from country string
+            self.ip_DB.append(tuple(line_array)) #line_array = [start_ip (decimal), end_ip (decimal), country]
         # TODO: Also do some initialization if needed.
 
     # @pkt_dir: either PKT_DIR_INCOMING or PKT_DIR_OUTGOING
@@ -30,5 +39,13 @@ class Firewall:
         pass
 
     # TODO: You can add more methods as you want.
+    @staticmethod
+    def ip2long(ip):
+        """
+        Convert an IP string to long
+        """
+        packedIP = socket.inet_aton(ip)
+        return struct.unpack("!L", packedIP)[0]
+
 
 # TODO: You may want to add more classes/functions as well.
