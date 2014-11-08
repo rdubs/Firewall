@@ -12,8 +12,13 @@ class Firewall:
         self.iface_ext = iface_ext
 
         # TODO: Load the firewall rules (from rule_filename) here.
-        print 'I am supposed to load rules from %s, but I am feeling lazy.' % \
-                config['rule']
+        self.rules = []
+        rules = open('rules.conf')
+        for line in rules:
+            if line[0] != '%' and line != '\n':
+                self.rules.append(line)
+        # print 'I am supposed to load rules from %s, but I am feeling lazy.' % \
+        #         config['rule']
 
         # TODO: Load the GeoIP DB ('geoipdb.txt') as well.
         # TODO: Also do some initialization if needed.
