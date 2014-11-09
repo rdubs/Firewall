@@ -46,6 +46,20 @@ class Firewall:
         """
         packedIP = socket.inet_aton(ip)
         return struct.unpack("!L", packedIP)[0]
+    @staticmethod
+    def db_search(ip, db, min, max):
+        """
+        Given an ip address and a db return the entry that
+        contains ip in its range. If no such entry exists return
+        None.
+        """
+        mid = (min_val + max_val) / 2
+        if ip < ip_DB[mid][0]:
+            return db_search(ip, db, min_val, mid - 1)
+        else if ip > ip_DB[search_range / 2][1]:
+            return db_search(ip, db, mid + 1, max_val)
+        else:
+            return ip_DB[mid]
 
 
 # TODO: You may want to add more classes/functions as well.
