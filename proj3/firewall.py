@@ -8,6 +8,9 @@ import socket, struct
 # You must NOT use any 3rd-party libraries, though.
 
 class Firewall:
+    ICMP = 1
+    TCP = 6
+    UDP = 17
     def __init__(self, config, iface_int, iface_ext):
         self.iface_int = iface_int
         self.iface_ext = iface_ext
@@ -17,16 +20,14 @@ class Firewall:
         rules = open('rules.conf')
         for line in rules:
             if line[0] != '%' and line != '\n':
-                self.rules.append(line)
-        # print 'I am supposed to load rules from %s, but I am feeling lazy.' % \
-        #         config['rule']
-
-        # TODO: Load the GeoIP DB ('geoipdb.txt') as well.
+                line = line.split(' ')
+                self.rules.append(tuple(line)) # line has format: (<verdict>, <protocol>, <external IP address>, <external port>) 
+                                               # or (<verdict>, dns, <domain name>)
         self.ip_DB = []
         ip_ranges = open('geoipdb.txt')
         for line in ip_ranges:
             line_array = line.split(' ') 
-            line_array[0] = self.ip2long(line_array[0]) # Go from IP string to decimal: '1.0.0.0' => 8. 
+            line_array[0] = self.ip2long(line_array[0]) # Go from IP string to decimal: '1.0.0.0' => 16777216. 
             line_array[1] = self.ip2long(line_array[1])
             line_array[2] = line_array[2].replace('\n', '') #strip new line character from country string
             self.ip_DB.append(tuple(line_array)) #line_array = [start_ip (decimal), end_ip (decimal), country]
@@ -35,7 +36,22 @@ class Firewall:
     # @pkt_dir: either PKT_DIR_INCOMING or PKT_DIR_OUTGOING
     # @pkt: the actual data of the IPv4 packet (including IP header)
     def handle_packet(self, pkt_dir, pkt):
-        # TODO: Your main firewall code will be here.
+        #drop packet if header length is < 5 (spec)
+        header_len = (ord(pkt[0:1]) & 0x0f) * 4
+        ip_header = pkt[0: header_len]
+        transport_header = pkt[header_len: -1]
+        protocol = ord(ip_header[9:10])
+
+        external_ip = ip_header[12:16] # initialize external_ip to source ip (where packet came from)
+        external_port = transport_header[0:2]
+        if pkt_dir == PKT_DIR_OUTGOING:
+            external_ip = ip_header[16: 20] #overwrite external_ip to destination ip if packet is outgoing FLAG: is this right?
+            external_port = transport_header[0:2]
+        external_ip = self.ip2long(socket.inet_ntoa(external_ip)) #go from bytes to ip string to long.
+    
+        #an ICMP packet does not have an external_port.
+        if protocol == ICMP:
+            icmp_type = transport_header[0:1]
         pass
 
     # TODO: You can add more methods as you want.
