@@ -62,6 +62,7 @@ class Firewall:
         """
         packedIP = socket.inet_aton(ip)
         return struct.unpack("!L", packedIP)[0]
+    
     @staticmethod
     def db_search(ip, db, min, max):
         """
