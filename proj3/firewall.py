@@ -58,42 +58,55 @@ class Firewall:
         if protocol == Firewall.ICMP:
             icmp_type = transport_header[0:1]
 
-        #handle dns
+        #figure out what type of packet we have.
+        is_dns_packet = False
+        
+        #handle dns parsing
         if external_port == 53 and protocol == Firewall.UDP:
+            #FLAG The project specs mentions that we are should be "primarily interested" in A and AAAA QTYPE packets. 
+            #So does that mean that we drop packets that have a different QTYPE, or do we assume that they do not match any DNS rule? answ: the latter
+            is_dns_packet = True #we know we have a DNS packet.    
             dns_header = transport_header[8:]
             qd_count = struct.unpack('!H', dns_header[4:6])[0]
             if qd_count > 1:
                 return
             dns_question = dns_header[12:] #question portion of dns header
-            qname = self.get_domain_name(dns_question) #domain name e.g. 'www.google.com' 
+            qname = self.get_domain_name(dns_question) #domain name (e.g. 'www.google.com') 
 
         #handle packet rule matching.
-        # curr_match = None
-        # for rule in rules:
-        #     #Protocol/IP/Port Rules
-        #     if len(rule) == 4:
-        #         if protocol == rule[1]:
+        curr_match = None
+        for rule in rules:
+            #we have a Protocol/IP/Port Rule. These rules can be applied to all packets.
+            if len(rule) == 4:
+                if protocol == rule[1] and self.external_ip_matches(external_ip, rule[2]) && self.external_port_matches(external_port, rule[3])
+                    curr_match = rule
 
-
-                
-
-
-
-            #DNS rule
-            # else:
-
-
-
-
-            
-
-
-
-        pass
+            # we have DNS rule
+            else:
+                #only check DNS rules if packet is a dns packet
+                if is_dns_packet and self.domain_matches(qname, rule[2]):
+                    curr_match = rule
+        
+        #send packet only if the last rule it matched says to let it pass
+        if curr_match[0] == 'pass':
+            if pkt_dir == PKT_DIR_INCOMING:
+                self.iface_int.send_ip_packet(pkt)
+            elif pkt_dir == PKT_DIR_OUTGOING:
+                self.iface_ext.send_ip_packet(pkt)
 
     # TODO: You can add more methods as you want.
-    # @staticmethod
-    # def protocolMatches()
+    @staticmethod
+    def external_ip_matches(external_ip, rule_ip):
+        pass
+
+    @staticmethod
+    def external_port_matches(external_port, rule_port):
+        pass
+
+    @staticmethod
+    def domain_matches(domain, rule_domain):
+        pass
+
     @staticmethod
     def get_domain_name(qname):
         length_byte = struct.unpack('!b', qname[0:1])[0]
@@ -108,7 +121,6 @@ class Firewall:
             curr_byte += 1
         return domain_str
 
-    
     @staticmethod
     def ip2long(ip):
         """
@@ -117,6 +129,7 @@ class Firewall:
         packedIP = socket.inet_aton(ip)
         return struct.unpack("!L", packedIP)[0]
     
+    #FLAG this does not return NONE if ip not found.
     @staticmethod
     def db_search(ip, db, min, max):
         """
@@ -132,5 +145,3 @@ class Firewall:
         else:
             return ip_DB[mid]
 
-
-# TODO: You may want to add more classes/functions as well.
