@@ -36,25 +36,79 @@ class Firewall:
     # @pkt_dir: either PKT_DIR_INCOMING or PKT_DIR_OUTGOING
     # @pkt: the actual data of the IPv4 packet (including IP header)
     def handle_packet(self, pkt_dir, pkt):
-        #drop packet if header length is < 5 (spec)
         header_len = (ord(pkt[0:1]) & 0x0f) * 4
+        #drop packet if header length is < 5 (spec)
+        if header_len < 5:
+            return
         ip_header = pkt[0: header_len]
-        transport_header = pkt[header_len: -1]
+        transport_header = pkt[header_len:]
         protocol = ord(ip_header[9:10])
-
-        external_ip = ip_header[12:16] # initialize external_ip to source ip (where packet came from)
-        external_port = transport_header[0:2]
+        
         if pkt_dir == PKT_DIR_OUTGOING:
-            external_ip = ip_header[16: 20] #overwrite external_ip to destination ip if packet is outgoing FLAG: is this right?
+            external_ip = ip_header[16: 20] 
+            external_port = struct.unpack('!H', transport_header[2:4])[0]
+        #packet is incoming
+        else:
+            external_ip = ip_header[12:16] # initialize external_ip to source ip (where packet came from)
             external_port = transport_header[0:2]
         external_ip = self.ip2long(socket.inet_ntoa(external_ip)) #go from bytes to ip string to long.
-    
+
+     
         #an ICMP packet does not have an external_port.
-        if protocol == ICMP:
+        if protocol == Firewall.ICMP:
             icmp_type = transport_header[0:1]
+
+        #handle dns
+        if external_port == 53 and protocol == Firewall.UDP:
+            dns_header = transport_header[8:]
+            qd_count = struct.unpack('!H', dns_header[4:6])[0]
+            if qd_count > 1:
+                return
+            dns_question = dns_header[12:] #question portion of dns header
+            qname = self.get_domain_name(dns_question) #domain name e.g. 'www.google.com' 
+
+        #handle packet rule matching.
+        # curr_match = None
+        # for rule in rules:
+        #     #Protocol/IP/Port Rules
+        #     if len(rule) == 4:
+        #         if protocol == rule[1]:
+
+
+                
+
+
+
+            #DNS rule
+            # else:
+
+
+
+
+            
+
+
+
         pass
 
     # TODO: You can add more methods as you want.
+    # @staticmethod
+    # def protocolMatches()
+    @staticmethod
+    def get_domain_name(qname):
+        length_byte = struct.unpack('!b', qname[0:1])[0]
+        curr_byte = 1
+        domain_str = ''
+        while length_byte != 0:
+            for i in range(0, length_byte):
+                domain_str += chr(struct.unpack('!B', qname[curr_byte:(curr_byte + 1)])[0])
+                curr_byte += 1
+            domain_str += '.'
+            length_byte = struct.unpack('!b', qname[curr_byte:(curr_byte + 1)])[0]
+            curr_byte += 1
+        return domain_str
+
+    
     @staticmethod
     def ip2long(ip):
         """
@@ -73,7 +127,7 @@ class Firewall:
         mid = (min_val + max_val) / 2
         if ip < ip_DB[mid][0]:
             return db_search(ip, db, min_val, mid - 1)
-        else if ip > ip_DB[search_range / 2][1]:
+        elif ip > ip_DB[search_range / 2][1]:
             return db_search(ip, db, mid + 1, max_val)
         else:
             return ip_DB[mid]
