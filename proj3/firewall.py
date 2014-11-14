@@ -57,7 +57,8 @@ class Firewall:
         
         #an ICMP packet does not have an external_port.
         if protocol == Firewall.ICMP:
-            icmp_type = transport_header[0:1]
+            #this is not actually a port, but the type of icmp request.
+            external_port = struct.unpack('!B',transport_header[0:1])
 
         #figure out what type of packet we have.
         is_dns_packet = False
