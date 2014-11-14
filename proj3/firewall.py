@@ -50,10 +50,10 @@ class Firewall:
         #packet is incoming
         else:
             external_ip = ip_header[12:16] # initialize external_ip to source ip (where packet came from)
-            external_port = transport_header[0:2]
-        external_ip = self.ip2long(socket.inet_ntoa(external_ip)) #go from bytes to ip string to long.
+            external_port = struct.unpack('!H', transport_header[0:2])
 
-     
+        external_ip = socket.inet_ntoa(external_ip) #go from bytes to ip string
+        
         #an ICMP packet does not have an external_port.
         if protocol == Firewall.ICMP:
             icmp_type = transport_header[0:1]
@@ -71,14 +71,16 @@ class Firewall:
             if qd_count > 1:
                 return
             dns_question = dns_header[12:] #question portion of dns header
-            qname = self.get_domain_name(dns_question) #domain name (e.g. 'www.google.com') 
+            qtype = struct.unpack('!H', dns_question[6:8])
+            print('qtype is: ' + str(qtype))
+            qname = self.get_domain_name(dns_question) #domain name (e.g. 'www.google.com')
 
         #handle packet rule matching.
         curr_match = None
-        for rule in rules:
+        for rule in self.rules:
             #we have a Protocol/IP/Port Rule. These rules can be applied to all packets.
             if len(rule) == 4:
-                if protocol == rule[1] and self.external_ip_matches(external_ip, rule[2]) && self.external_port_matches(external_port, rule[3])
+                if protocol == rule[1] and self.external_ip_matches(external_ip, rule[2]) and self.external_port_matches(external_port, rule[3]):
                     curr_match = rule
 
             # we have DNS rule
@@ -88,7 +90,7 @@ class Firewall:
                     curr_match = rule
         
         #send packet only if the last rule it matched says to let it pass
-        if curr_match[0] == 'pass':
+        if curr_match == None or curr_match[0] == 'pass':
             if pkt_dir == PKT_DIR_INCOMING:
                 self.iface_int.send_ip_packet(pkt)
             elif pkt_dir == PKT_DIR_OUTGOING:
@@ -97,7 +99,25 @@ class Firewall:
     # TODO: You can add more methods as you want.
     @staticmethod
     def external_ip_matches(external_ip, rule_ip):
-        pass
+        if rule_ip == 'any':
+            return True
+        #rule_ip is a 2 byte country code (e.g. 'it')
+        elif len(rule_ip) == 2:
+            external_ip = self.ip2long(external_ip) #go from bytes to ip string to long.
+            db_entry = db_search(external_ip, self.ip_DB, 0, len(self.ip_DB) - 1)
+            return db_entry[2] == rule_ip
+        #FLAG we have cidr notation
+        elif '/' in rule_ip:
+            sig_bits = rule_ip[-1] # get thing after the slash (number of bits we have to look at)
+            rule_ip = rule_ip[0: rule_ip.index('/')] #isolate ip address
+            rule_ip_as_num = self.ip2long(rule_ip)
+            rule_ip_as_bin = '{0:032b}'.format(ip_as_num) #go from num to binary string
+            external_ip_as_num = self.ip2long(external_ip)
+            external_ip_as_bin = '{0:032b}'.format(external_ip_as_num)
+            return rule_ip_as_bin[0:sig_bits] == external_ip_as_bin[0:sig_bits]
+        #regular ip
+        else:
+            return external_ip == rule_ip
 
     @staticmethod
     def external_port_matches(external_port, rule_port):
