@@ -101,11 +101,22 @@ class Firewall:
 
     @staticmethod
     def external_port_matches(external_port, rule_port):
-        pass
+        if "-" not in rule_port:
+            return external_port == int(rule_port)
+        port_range = rule_port.split('-')
+        return external_port >= int(port_range[0]) and external port <= int(port_range[1])
 
     @staticmethod
     def domain_matches(domain, rule_domain):
-        pass
+        if rule_domain == "*":
+            return True
+        elif rule_domain[0] == "*":
+            for i in range(1, len(rule_domain)):
+                if rule_domain[-i] != domain[-i]:
+                    return False
+            return True
+        else:
+            return domain == rule_domain
 
     @staticmethod
     def get_domain_name(qname):
@@ -128,8 +139,7 @@ class Firewall:
         """
         packedIP = socket.inet_aton(ip)
         return struct.unpack("!L", packedIP)[0]
-    
-    #FLAG this does not return NONE if ip not found.
+
     @staticmethod
     def db_search(ip, db, min, max):
         """
@@ -138,10 +148,11 @@ class Firewall:
         None.
         """
         mid = (min_val + max_val) / 2
-        if ip < ip_DB[mid][0]:
+        if min > max:
+            return None
+        elif ip < ip_DB[mid][0]:
             return db_search(ip, db, min_val, mid - 1)
         elif ip > ip_DB[search_range / 2][1]:
             return db_search(ip, db, mid + 1, max_val)
         else:
             return ip_DB[mid]
-
