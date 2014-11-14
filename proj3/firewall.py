@@ -20,13 +20,14 @@ class Firewall:
         rules = open('rules.conf')
         for line in rules:
             if line[0] != '%' and line != '\n':
-                line = line.split(' ')
+                line = line.replace('\n', '')
+                line = line.split()
                 self.rules.append(tuple(line)) # line has format: (<verdict>, <protocol>, <external IP address>, <external port>) 
                                                # or (<verdict>, dns, <domain name>)
         self.ip_DB = []
         ip_ranges = open('geoipdb.txt')
         for line in ip_ranges:
-            line_array = line.split(' ') 
+            line_array = line.split()
             line_array[0] = self.ip2long(line_array[0]) # Go from IP string to decimal: '1.0.0.0' => 16777216. 
             line_array[1] = self.ip2long(line_array[1])
             line_array[2] = line_array[2].replace('\n', '') #strip new line character from country string
@@ -63,17 +64,17 @@ class Firewall:
         
         #handle dns parsing
         if external_port == 53 and protocol == Firewall.UDP:
-            #FLAG The project specs mentions that we are should be "primarily interested" in A and AAAA QTYPE packets. 
-            #So does that mean that we drop packets that have a different QTYPE, or do we assume that they do not match any DNS rule? answ: the latter
-            is_dns_packet = True #we know we have a DNS packet.    
+            is_dns_packet = True #we know we have a DNS packet.
             dns_header = transport_header[8:]
             qd_count = struct.unpack('!H', dns_header[4:6])[0]
             if qd_count > 1:
                 return
             dns_question = dns_header[12:] #question portion of dns header
-            qtype = struct.unpack('!H', dns_question[6:8])
-            print('qtype is: ' + str(qtype))
-            qname = self.get_domain_name(dns_question) #domain name (e.g. 'www.google.com')
+            qname, qtype = self.get_domain_name(dns_question) #domain name (e.g. 'www.google.com')
+            
+            # only consider packets with proper qtype (1 or 28) for dns rule matches
+            if qtype not in (1,28):
+                is_dns_packet = False
 
         #handle packet rule matching.
         curr_match = None
@@ -90,6 +91,7 @@ class Firewall:
                     curr_match = rule
         
         #send packet only if the last rule it matched says to let it pass
+        print('the matched rule is: ' + str(curr_match))
         if curr_match == None or curr_match[0] == 'pass':
             if pkt_dir == PKT_DIR_INCOMING:
                 self.iface_int.send_ip_packet(pkt)
@@ -124,7 +126,7 @@ class Firewall:
         if "-" not in rule_port:
             return external_port == int(rule_port)
         port_range = rule_port.split('-')
-        return external_port >= int(port_range[0]) and external port <= int(port_range[1])
+        return external_port >= int(port_range[0]) and external_port <= int(port_range[1])
 
     @staticmethod
     def domain_matches(domain, rule_domain):
@@ -150,7 +152,8 @@ class Firewall:
             domain_str += '.'
             length_byte = struct.unpack('!b', qname[curr_byte:(curr_byte + 1)])[0]
             curr_byte += 1
-        return domain_str
+        domain_str = domain_str[0:-1] #get rid of extra '.' at end
+        return domain_str, struct.unpack('!H', qname[curr_byte: curr_byte + 2])[0]
 
     @staticmethod
     def ip2long(ip):
