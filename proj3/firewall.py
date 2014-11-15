@@ -42,11 +42,11 @@ class Firewall:
         if header_len < 5:
             return
         ip_header = pkt[0: header_len]
-        transport_header = pkt[header_len:]
+        transport_header = pkt[header_len:] 
         protocol = ord(ip_header[9:10])
         
         if pkt_dir == PKT_DIR_OUTGOING:
-            external_ip = ip_header[16: 20] 
+            external_ip = ip_header[16: 20]
             external_port = struct.unpack('!H', transport_header[2:4])[0]
         #packet is incoming
         else:
@@ -82,9 +82,8 @@ class Firewall:
         for rule in self.rules:
             #we have a Protocol/IP/Port Rule. These rules can be applied to all packets.
             if len(rule) == 4:
-                if protocol == rule[1] and self.external_ip_matches(external_ip, rule[2]) and self.external_port_matches(external_port, rule[3]):
+                if self.protocol_matches(protocol, rule[1]) and self.external_ip_matches(external_ip, rule[2]) and self.external_port_matches(external_port, rule[3]):
                     curr_match = rule
-
             # we have DNS rule
             else:
                 #only check DNS rules if packet is a dns packet
@@ -100,15 +99,28 @@ class Firewall:
                 self.iface_ext.send_ip_packet(pkt)
 
     # TODO: You can add more methods as you want.
+    def protocol_matches(self, packet_prot, rule_prot):
+        if rule_prot == 'any':
+            return True
+        return packet_prot == self.protocol_string_to_num(rule_prot)
+    
     @staticmethod
-    def external_ip_matches(external_ip, rule_ip):
+    def protocol_string_to_num(prot):
+        if prot == 'icmp':
+            return 1
+        elif prot == 'tcp':
+            return 6
+        elif prot == 'udp':
+            return 17 
+    
+    def external_ip_matches(self, external_ip, rule_ip):
         if rule_ip == 'any':
             return True
         #rule_ip is a 2 byte country code (e.g. 'it')
         elif len(rule_ip) == 2:
             external_ip = self.ip2long(external_ip) #go from bytes to ip string to long.
-            db_entry = db_search(external_ip, self.ip_DB, 0, len(self.ip_DB) - 1)
-            return db_entry[2] == rule_ip
+            db_entry = self.db_search(external_ip, self.ip_DB, 0, len(self.ip_DB) - 1)
+            return db_entry[2].lower() == rule_ip
         #FLAG we have cidr notation
         elif '/' in rule_ip:
             sig_bits = rule_ip[-1] # get thing after the slash (number of bits we have to look at)
@@ -124,6 +136,8 @@ class Firewall:
 
     @staticmethod
     def external_port_matches(external_port, rule_port):
+        if rule_port == 'any':
+            return True
         if "-" not in rule_port:
             return external_port == int(rule_port)
         port_range = rule_port.split('-')
@@ -164,19 +178,18 @@ class Firewall:
         packedIP = socket.inet_aton(ip)
         return struct.unpack("!L", packedIP)[0]
 
-    @staticmethod
-    def db_search(ip, db, min, max):
+    def db_search(self, ip, db, min_val, max_val):
         """
         Given an ip address and a db return the entry that
         contains ip in its range. If no such entry exists return
         None.
         """
         mid = (min_val + max_val) / 2
-        if min > max:
+        if min_val > max_val:
             return None
-        elif ip < ip_DB[mid][0]:
-            return db_search(ip, db, min_val, mid - 1)
-        elif ip > ip_DB[search_range / 2][1]:
-            return db_search(ip, db, mid + 1, max_val)
+        elif ip < db[mid][0]:
+            return self.db_search(ip, db, min_val, mid - 1)
+        elif ip > db[mid][1]:
+            return self.db_search(ip, db, mid + 1, max_val)
         else:
-            return ip_DB[mid]
+            return db[mid]
