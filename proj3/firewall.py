@@ -51,7 +51,7 @@ class Firewall:
         #packet is incoming
         else:
             external_ip = ip_header[12:16] # initialize external_ip to source ip (where packet came from)
-            external_port = struct.unpack('!H', transport_header[0:2])
+            external_port = struct.unpack('!H', transport_header[0:2])[0]
 
         external_ip = socket.inet_ntoa(external_ip) #go from bytes to ip string
         
@@ -82,16 +82,15 @@ class Firewall:
         for rule in self.rules:
             #we have a Protocol/IP/Port Rule. These rules can be applied to all packets.
             if len(rule) == 4:
-                if self.protocol_matches(protocol, rule[1]) and self.external_ip_matches(external_ip, rule[2]) and self.external_port_matches(external_port, rule[3]):
+                if self.protocol_matches(protocol, rule[1].lower()) and self.external_ip_matches(external_ip, rule[2].lower()) and self.external_port_matches(external_port, rule[3]):
                     curr_match = rule
             # we have DNS rule
             else:
                 #only check DNS rules if packet is a dns packet
-                if is_dns_packet and self.domain_matches(qname, rule[2]):
+                if is_dns_packet and self.domain_matches(qname, rule[2].lower()):
                     curr_match = rule
         
         #send packet only if the last rule it matched says to let it pass
-        print('the matched rule is: ' + str(curr_match))
         if curr_match == None or curr_match[0] == 'pass':
             if pkt_dir == PKT_DIR_INCOMING:
                 self.iface_int.send_ip_packet(pkt)
@@ -120,13 +119,13 @@ class Firewall:
         elif len(rule_ip) == 2:
             external_ip = self.ip2long(external_ip) #go from bytes to ip string to long.
             db_entry = self.db_search(external_ip, self.ip_DB, 0, len(self.ip_DB) - 1)
-            return db_entry[2].lower() == rule_ip
-        #FLAG we have cidr notation
+            return db_entry and db_entry[2].lower() == rule_ip
+        #we have cidr notation
         elif '/' in rule_ip:
-            sig_bits = rule_ip[-1] # get thing after the slash (number of bits we have to look at)
+            sig_bits = int(rule_ip[-1]) # get thing after the slash (number of bits we have to look at)
             rule_ip = rule_ip[0: rule_ip.index('/')] #isolate ip address
             rule_ip_as_num = self.ip2long(rule_ip)
-            rule_ip_as_bin = '{0:032b}'.format(ip_as_num) #go from num to binary string
+            rule_ip_as_bin = '{0:032b}'.format(rule_ip_as_num) #go from num to binary string
             external_ip_as_num = self.ip2long(external_ip)
             external_ip_as_bin = '{0:032b}'.format(external_ip_as_num)
             return rule_ip_as_bin[0:sig_bits] == external_ip_as_bin[0:sig_bits]
