@@ -53,7 +53,6 @@ class Firewall:
             external_ip = ip_header[12:16] # initialize external_ip to source ip (where packet came from)
             external_port = struct.unpack('!H', transport_header[0:2])[0]
 
-        external_ip = pkt[0:1]
         try:
             external_ip = socket.inet_ntoa(external_ip) #go from bytes to ip string
         except socket.error:
