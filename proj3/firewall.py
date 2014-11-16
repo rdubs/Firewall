@@ -53,7 +53,11 @@ class Firewall:
             external_ip = ip_header[12:16] # initialize external_ip to source ip (where packet came from)
             external_port = struct.unpack('!H', transport_header[0:2])[0]
 
-        external_ip = socket.inet_ntoa(external_ip) #go from bytes to ip string
+        external_ip = pkt[0:1]
+        try:
+            external_ip = socket.inet_ntoa(external_ip) #go from bytes to ip string
+        except socket.error:
+            return
         
         #an ICMP packet does not have an external_port.
         if protocol == Firewall.ICMP:
@@ -176,7 +180,10 @@ class Firewall:
         """
         Convert an IP string to long
         """
-        packedIP = socket.inet_aton(ip)
+        try:
+            packedIP = socket.inet_aton(ip)
+        except socket.error:
+            return
         return struct.unpack("!L", packedIP)[0]
 
     def db_search(self, ip, db, min_val, max_val):
