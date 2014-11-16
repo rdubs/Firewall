@@ -123,6 +123,8 @@ class Firewall:
         #we have cidr notation
         elif '/' in rule_ip:
             sig_bits = int(rule_ip[-1]) # get thing after the slash (number of bits we have to look at)
+            if sig_bits == 0:
+                return True
             rule_ip = rule_ip[0: rule_ip.index('/')] #isolate ip address
             rule_ip_as_num = self.ip2long(rule_ip)
             rule_ip_as_bin = '{0:032b}'.format(rule_ip_as_num) #go from num to binary string
